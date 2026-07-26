@@ -9,4 +9,4 @@ NEW_VERSION="$1"
 
 set -x
 
-git tag -a "v${NEW_VERSION}" -m "Version ${NEW_VERSION}"; git push --tags; git push
+git tag -a "${NEW_VERSION}" -m "Version ${NEW_VERSION}"; git push --tags; git push
