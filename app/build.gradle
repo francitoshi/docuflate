@@ -1,0 +1,247 @@
+plugins
+{
+    id 'java'
+    id 'application'
+}
+
+group = 'com.github.francitoshi'
+version = '0.0.2'
+
+repositories
+{
+    mavenCentral()
+    maven { url = 'https://jitpack.io' }
+}
+
+def nutVersion = '0.1.85'
+
+configurations.all 
+{
+    resolutionStrategy 
+    {
+        force "com.github.francitoshi:nut-base:${nutVersion}"
+        force "com.github.francitoshi:nut-core:${nutVersion}"
+        force "com.github.francitoshi:nut-headless:${nutVersion}"
+        //failOnVersionConflict()
+    }
+}
+
+dependencies
+{
+    implementation "com.github.francitoshi:nut-base:${nutVersion}"
+    implementation "com.github.francitoshi:nut-core:${nutVersion}"
+    implementation "com.github.francitoshi:nut-headless:${nutVersion}"
+    
+    implementation 'com.h2database:h2:2.4.240'
+
+    // Use JUnit Jupiter for testing.
+    testImplementation libs.junit.jupiter
+
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // This dependency is used by the application.
+    implementation libs.guava
+}
+
+java
+{
+    toolchain
+    {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+application
+{
+    mainClass = 'io.francitoshi.docuflate.Main'
+    applicationName = 'docuflate'
+}
+
+import java.text.SimpleDateFormat
+import java.util.Date
+
+def buildDate = LocalDate.now()
+
+jar
+{
+    archiveFileName = "docuflate-${version}.jar"
+    manifest
+    {
+        attributes 'Main-Class': 'io.francitoshi.docuflate.Main'
+        attributes 'Implementation-Title': project.name
+        attributes 'Implementation-Version': project.version
+        attributes 'Implementation-Vendor': 'francitoshi@gmail.com'
+        attributes 'Build-Date': buildDate    
+    }
+}
+
+tasks.named('test')
+{
+    useJUnitPlatform()
+}
+
+task createDistribution(type: Copy)
+{
+    from jar
+    from configurations.runtimeClasspath
+    into layout.buildDirectory.dir("distribution")
+}
+
+build.dependsOn createDistribution
+
+// ============================================================
+// LOCAL PACKAGING WITH JPACKAGE
+// tasks: linux-release, windows-release, mac-release
+// ============================================================
+
+// Captured at configuration time for compatibility with configuration cache
+def buildOutputDir = layout.buildDirectory.get().asFile
+
+def javaHome = System.getenv('JAVA_HOME') ?:
+    javaToolchains.launcherFor 
+    {
+        languageVersion = JavaLanguageVersion.of(17)
+    }.get().metadata.installationPath.asFile.absolutePath
+
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+
+def jpackageExe = "${javaHome}${File.separator}bin${File.separator}jpackage${isWindows ? '.exe' : ''}"
+
+def jpackageBaseArgs = 
+[
+    '--input',       "${buildOutputDir}/distribution",
+    '--name',        'docuflate',
+    '--app-version', project.version,
+    '--main-jar',    "docuflate-${project.version}.jar",
+    '--main-class',  'io.francitoshi.docuflate.Main',
+    '--description', 'compress documents files using the best option (.gz, .bz2 or .xz)',
+    '--vendor',      'francitoshi',
+]
+
+// ── LINUX: generates .deb and .rpm ────────────────────────────────
+
+task('linux-release-deb', type: Exec) 
+{
+    dependsOn createDistribution
+    group = 'release'
+    description = 'Generate a .deb installer for Linux using jpackage'
+
+    def destDir = "${buildOutputDir}/installers/linux"
+    doFirst { new File(destDir).mkdirs() }
+
+    commandLine jpackageExe,
+        *jpackageBaseArgs,
+        '--type',           'deb',
+        '--dest',           destDir,
+        '--linux-shortcut',
+        '--resource-dir',   '../packaging'
+}
+
+task('linux-release-rpm', type: Exec)
+{
+    dependsOn createDistribution
+    group = 'release'
+    description = 'Generate a .rpm installer for Linux using jpackage'
+
+    def destDir = "${buildOutputDir}/installers/linux"
+    doFirst { new File(destDir).mkdirs() }
+
+    commandLine jpackageExe,
+        *jpackageBaseArgs,
+        '--type',           'rpm',
+        '--dest',           destDir,
+        '--linux-shortcut',
+        '--resource-dir',   '../packaging'
+}
+
+task('linux-release')
+{
+    dependsOn 'linux-release-deb', 'linux-release-rpm'
+    group = 'release'
+    description = 'Generates .deb and .rpm installers for Linux with jpackage'
+}
+
+// ── WINDOWS: Generates .exe and .msi ──────────────────────────────
+
+task('windows-release-exe', type: Exec)
+{
+    dependsOn createDistribution
+    group = 'release'
+    description = 'Generate .exe installer for Windows with jpackage'
+
+    def destDir = "${buildOutputDir}/installers/windows"
+    doFirst { new File(destDir).mkdirs() }
+
+    commandLine jpackageExe,
+        *jpackageBaseArgs,
+        '--type',            'exe',
+        '--dest',            destDir,
+        '--win-shortcut',
+        '--win-menu',
+        '--win-menu-group',  'francitoshi',
+        '--win-console'
+}
+
+task('windows-release-msi', type: Exec)
+{
+    dependsOn 'windows-release-exe'
+    group = 'release'
+    description = 'Genera instalador .msi para Windows con jpackage'
+
+    def destDir = "${buildOutputDir}/installers/windows"
+
+    commandLine jpackageExe,
+        *jpackageBaseArgs,
+        '--type',            'msi',
+        '--dest',            destDir,
+        '--win-shortcut',
+        '--win-menu',
+        '--win-menu-group',  'francitoshi',
+        '--win-console'
+}
+
+task('windows-release')
+{
+    dependsOn 'windows-release-exe', 'windows-release-msi'
+    group = 'release'
+    description = 'Generate .exe and .msi installers for Windows with jpackage'
+}
+
+// ── MAC: generate .dmg y .pkg ──────────────────────────────────
+
+task('mac-release-dmg', type: Exec)
+{
+    dependsOn createDistribution
+    group = 'release'
+    description = 'Generate a .dmg installer for macOS using jpackage'
+
+    def destDir = "${buildOutputDir}/installers/mac"
+    doFirst { new File(destDir).mkdirs() }
+
+    commandLine jpackageExe,
+        *jpackageBaseArgs,
+        '--type',             'dmg',
+        '--dest',             destDir,
+        '--mac-package-name', 'docuflate'
+}
+
+task('mac-release-pkg', type: Exec)
+{
+    dependsOn 'mac-release-dmg'
+    group = 'release'
+    description = 'Generate a .pkg installer for macOS using jpackage'
+
+    def destDir = "${buildOutputDir}/installers/mac"
+
+    commandLine jpackageExe,
+        *jpackageBaseArgs,
+        '--type',             'pkg',
+        '--dest',             destDir
+}
+
+task('mac-release')
+{
+    dependsOn 'mac-release-dmg', 'mac-release-pkg'
+    group = 'release'
+    description = 'Generate .dmg and .pkg installers for macOS with jpackage'
+}

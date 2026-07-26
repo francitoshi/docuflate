@@ -1,0 +1,33 @@
+docuflate v{$VERSION} ({$DATE})
+
+Copyright (c) 2026 francitoshi@gmail.com
+
+Uso: docuflate RUTA [OPCIONES]
+
+La aplicación que comprime todos los archivos de documentos usando la mejor opción (.gz, .bz2 o .xz)
+
+Opciones:
+  -t, --only-txt        solo commprime archivos .txt
+  -p, --only-pdf        solo commprime archivos .pdf
+  -h, --help            Muestra esta ayuda y termina
+  -L, --license         Muestra la licencia y termina
+  -v, --version         Muestra la versi
+  -x, --expand-env      Expande variables de entorno
+
+Ejemplos:
+  docuflate .
+      Comprime todos los archivos soportados
+
+  docuflate . -t
+      Comprime solo archivos .txt
+
+  docuflate . -p
+      Comprime solo archivos .pdf
+
+Notas:
+  - qpdf debe estar instalado
+  - gzip debe estar instalado
+  - bzip2 debe estar instalado
+  - xz debe estar instalado
+
+Report bugs to: <https://github.com/francitoshi/docuflate/issues>

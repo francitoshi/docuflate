@@ -1,0 +1,33 @@
+docuflate v{$VERSION} ({$DATE})
+
+Copyright (c) 2026 francitoshi@gmail.com
+
+Usage: docuflate PATH [OPTIONS]
+
+The app that compress all documents files using the best option (.gz, .bz2 or .xz)
+
+Options:
+  -t, --only-txt        only compress .txt files
+  -p, --only-pdf        only compress .pdf files
+  -h, --help            Display this help message and exit
+  -L, --license         Display license information and exit
+  -V, --version         Display version information and exit
+  -x, --expand-env      Expand environment variables
+
+Examples:
+  docuflate .
+      Compress all supported files
+
+  docuflate . -t
+      Compress only .txt files
+
+  docuflate . -p
+      Compress only .pdf files
+
+Notes:
+  - qpdf must be installed
+  - gzip must be installed
+  - bzip2 must be installed
+  - xz must be installed
+
+Report bugs to: <https://github.com/francitoshi/docuflate/issues>

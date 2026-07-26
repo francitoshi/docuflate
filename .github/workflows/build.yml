@@ -1,0 +1,278 @@
+# ============================================================
+# GitHub Actions: Build & Release — docuflate
+#
+# Compiles the JAR once on Linux, packages installers on 3
+# platforms in parallel, then publishes a GitHub Release.
+# ============================================================
+
+name: Build Installers
+
+on:
+  push:
+    tags:
+      - 'v*'          # Triggered by: git tag v1.0.0 && git push --tags
+  workflow_dispatch:   # Allows manual launch from GitHub UI
+
+permissions:
+  contents: read       # Minimum global permissions
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────
+  # 0) BUILD JAR — compile once (the JAR is cross-platform)
+  # ──────────────────────────────────────────────────────────
+  build-jar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build JAR
+        run: ./gradlew build
+
+      - name: Upload JAR distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-distribution
+          path: app/build/distribution/
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────
+  # 1) LINUX — generates .deb, .rpm, .sh, .snap
+  # ──────────────────────────────────────────────────────────
+  package-linux:
+    needs: build-jar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v4
+
+      - name: Extract tag version
+        # Removes the initial 'v': v1.2.3 → 1.2.3
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download JAR distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-distribution
+          path: app/build/distribution
+
+      - name: Create .deb installer (Debian/Ubuntu)
+        run: |
+          jpackage \
+            --type deb \
+            --name docuflate \
+            --app-version ${{env.VERSION}} \
+            --input app/build/distribution \
+            --main-jar docuflate-${{env.VERSION}}.jar \
+            --main-class io.francitoshi.docuflate.Main \
+            --dest build/installers/linux \
+            --description "compress all documents files using .gz, .bz2 or .xz" \
+            --vendor "francitoshi" \
+            --linux-shortcut \
+            --resource-dir packaging
+
+      - name: Create .rpm installer (RedHat/Fedora/CentOS)
+        run: |
+          sudo apt-get install -y rpm
+          jpackage \
+            --type rpm \
+            --name docuflate \
+            --app-version ${{env.VERSION}} \
+            --input app/build/distribution \
+            --main-jar docuflate-${{env.VERSION}}.jar \
+            --main-class io.francitoshi.docuflate.Main \
+            --dest build/installers/linux \
+            --description "compress all documents files using .gz, .bz2 or .xz" \
+            --vendor "francitoshi" \
+            --resource-dir packaging
+
+      - name: Create .sh universal installer
+        run: |
+          mkdir -p build/installers/linux
+          cat > build/installers/linux/instalar-docuflate.sh << EOF
+          #!/bin/bash
+          # Universal installer for Linux
+          INSTALL_DIR="\$HOME/.local/share/docuflate"
+          mkdir -p "\$INSTALL_DIR"
+          cp docuflate-${VERSION}.jar "\$INSTALL_DIR/"
+          mkdir -p "\$HOME/.local/bin"
+          cat > "\$HOME/.local/bin/docuflate" << 'LAUNCHER'
+          #!/bin/bash
+          java -jar "\$HOME/.local/share/docuflate/docuflate-${VERSION}.jar"
+          LAUNCHER
+          chmod +x "\$HOME/.local/bin/docuflate"
+          echo "✅ Installed. Run: docuflate"
+          EOF
+          chmod +x build/installers/linux/instalar-docuflate.sh
+
+      - name: Build Snap package
+        uses: snapcore/action-build@v1
+        id: snap-build
+        continue-on-error: true
+
+      - name: Move .snap to installers folder
+        if: steps.snap-build.outcome == 'success'
+        run: |
+          mkdir -p build/installers/linux
+          mv *.snap build/installers/linux/ 2>/dev/null || true
+
+      - name: Upload Linux installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-linux
+          path: build/installers/linux/
+
+  # ──────────────────────────────────────────────────────────
+  # 2) MACOS — generates .dmg and .pkg
+  # ──────────────────────────────────────────────────────────
+  package-mac:
+    needs: build-jar
+    runs-on: macos-latest
+
+    steps:
+      - name: Extract tag version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download JAR distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-distribution
+          path: app/build/distribution
+
+      - name: Create .dmg installer
+        run: |
+          jpackage \
+            --type dmg \
+            --name docuflate \
+            --app-version ${{env.VERSION}} \
+            --input app/build/distribution \
+            --main-jar docuflate-${{env.VERSION}}.jar \
+            --main-class io.francitoshi.docuflate.Main \
+            --dest build/installers/mac \
+            --description "compress all documents files using .gz, .bz2 or .xz" \
+            --vendor "francitoshi" \
+            --mac-package-name "docuflate"
+
+      - name: Create .pkg installer
+        run: |
+          jpackage \
+            --type pkg \
+            --name docuflate \
+            --app-version ${{env.VERSION}} \
+            --input app/build/distribution \
+            --main-jar docuflate-${{env.VERSION}}.jar \
+            --main-class io.francitoshi.docuflate.Main \
+            --dest build/installers/mac \
+            --description "compress all documents files using .gz, .bz2 or .xz" \
+            --vendor "francitoshi"
+
+      - name: Upload Mac installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-mac
+          path: build/installers/mac/
+
+  # ──────────────────────────────────────────────────────────
+  # 3) WINDOWS — generates .exe and .msi
+  # ──────────────────────────────────────────────────────────
+  package-windows:
+    needs: build-jar
+    runs-on: windows-latest
+
+    steps:
+      - name: Extract tag version
+        run: echo "VERSION=$($env:GITHUB_REF_NAME.Substring(1))" >> $env:GITHUB_ENV
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download JAR distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-distribution
+          path: app\build\distribution
+
+      - name: Install WiX Toolset (required for .msi)
+        run: |
+          choco install wixtoolset -y
+          echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" >> $env:GITHUB_PATH
+
+      - name: Create .exe installer
+        run: |
+          jpackage --type exe --name docuflate --app-version ${{env.VERSION}} --input app\build\distribution --main-jar docuflate-${{env.VERSION}}.jar --main-class io.francitoshi.docuflate.Main --dest build\installers\windows --description "compress all documents files using .gz, .bz2 or .xz" --vendor "francitoshi" --win-shortcut --win-menu --win-menu-group "francitoshi"
+
+      - name: Create .msi installer
+        run: |
+          jpackage --type msi --name docuflate --app-version ${{env.VERSION}} --input app\build\distribution --main-jar docuflate-${{env.VERSION}}.jar --main-class io.francitoshi.docuflate.Main --dest build\installers\windows --description "compress all documents files using .gz, .bz2 or .xz" --vendor "francitoshi" --win-shortcut --win-menu --win-menu-group "francitoshi"
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-windows
+          path: build\installers\windows\
+
+  # ──────────────────────────────────────────────────────────
+  # 4) RELEASE — Publish all installers on GitHub Releases
+  # ──────────────────────────────────────────────────────────
+  release:
+    needs: [package-linux, package-mac, package-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: installers-*
+          path: release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "docuflate ${{github.ref_name}}"
+          body: |
+            ## 🚀 Release ${{github.ref_name}}
+
+            ### Download your installer:
+            | Platform   | Format  | Description                        |
+            |------------|---------|------------------------------------|
+            | 🐧 Linux   | `.deb`  | Debian, Ubuntu, Mint               |
+            | 🐧 Linux   | `.rpm`  | Fedora, CentOS, RHEL               |
+            | 🐧 Linux   | `.sh`   | Any Linux distribution             |
+            | 🍎 macOS   | `.dmg`  | Drag-and-drop visual installation  |
+            | 🍎 macOS   | `.pkg`  | Silent/enterprise installation     |
+            | 🪟 Windows | `.exe`  | Installation wizard                |
+            | 🪟 Windows | `.msi`  | Enterprise/GPO installation        |
+          files: |
+            release/**/*
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
