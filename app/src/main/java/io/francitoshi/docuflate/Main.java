@@ -17,8 +17,6 @@ import java.io.File;
 import java.time.LocalDate;
 import java.util.Locale;
 import java.util.ResourceBundle;
-import org.h2.mvstore.MVMap;
-import org.h2.mvstore.MVStore;
 
 public class Main
 {

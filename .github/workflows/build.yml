@@ -10,11 +10,11 @@ name: Build Installers
 on:
   push:
     tags:
-      - 'v*'          # Triggered by: git tag v1.0.0 && git push --tags
-  workflow_dispatch:   # Allows manual launch from GitHub UI
+      - '[0-9]*.[0-9]*' # Triggered by: git tag 1.0.0 && git push --tags
+  workflow_dispatch:    # Allows manual launch from GitHub UI
 
 permissions:
-  contents: read       # Minimum global permissions
+  contents: read        # Minimum global permissions
 
 jobs:
 
