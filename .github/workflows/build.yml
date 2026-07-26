@@ -60,7 +60,7 @@ jobs:
 
       - name: Extract tag version
         # Removes the initial 'v': v1.2.3 → 1.2.3
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+        run: echo "VERSION=$GITHUB_REF_NAME" >> $GITHUB_ENV
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -149,7 +149,7 @@ jobs:
 
     steps:
       - name: Extract tag version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+        run: echo "VERSION=$GITHUB_REF_NAME" >> $GITHUB_ENV
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -205,7 +205,7 @@ jobs:
 
     steps:
       - name: Extract tag version
-        run: echo "VERSION=$($env:GITHUB_REF_NAME.Substring(1))" >> $env:GITHUB_ENV
+        run: echo "VERSION=$env:GITHUB_REF_NAME" >> $env:GITHUB_ENV
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
