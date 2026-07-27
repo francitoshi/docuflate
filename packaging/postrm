@@ -3,5 +3,4 @@ set -e
 
 rm -f /usr/bin/docuflate
 
-
 exit 0
