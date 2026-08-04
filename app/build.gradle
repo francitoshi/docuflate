@@ -12,7 +12,7 @@ repositories
     maven { url = 'https://jitpack.io' }
 }
 
-def nutVersion = '0.1.85'
+def nutVersion = '0.1.87'
 
 configurations.all 
 {
